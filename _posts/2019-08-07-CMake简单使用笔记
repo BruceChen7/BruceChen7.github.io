@@ -1,0 +1,355 @@
+---
+title: CMake简单使用笔记
+date: 2019-08-07 16:03:54
+tag: tools
+---
+
+## 资料来源
+* https://github.com/ttroy50/cmake-examples
+
+
+## project
+```
+project(leveldb VERSION 1.21.0 LANGUAGES C CXX)
+```
+
+
+## 常见的变量
+
+| Variable | Info|
+|----------|------|
+|CMAKE_SOURCE_DIR|The root source directory|
+|CMAKE_CURRENT_SOURCE_DIR|The current source directory if using sub-projects and directories.|
+|PROJECT_SOURCE_DIR|The source directory of the current cmake project.|
+|C MAKE_BINARY_DIR|The root binary / build directory. This is the directory where you ran the cmake command.|
+|CMAKE_CURRENT_BINARY_DIR|The build directory you are currently in|
+|PROJECT_BINARY_DIR|The build directory for the current project.|
+
+## CMAKE_C_STANDARD
+
+```cmake
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED OFF)
+```
+
+* Supported values are 90, 99 and 11
+
+**Create a sources variable with a link to all cpp files to compile**
+
+```
+set(SOURCES
+    src/Hello.cpp
+    src/main.cpp
+)
+
+add_executable(${PROJECT_NAME} ${SOURCES})
+```
+
+## Adding a Static Library
+
+```
+#生成静态连接库
+add_library(hello_library STATIC
+    src/Hello.cpp
+)
+
+# 生成动态连接库
+add_library(hello_library SHARED
+    src/Hello.cpp
+)
+
+# 给库添加一个别名
+add_library(hello::library ALIAS hello_library)
+
+
+add_executable(hello_binary
+    src/main.cpp
+)
+
+# 可以使用别名来连接库
+target_link_libraries(hello_binary
+    PRIVATE
+        hello::library
+)
+```
+
+## linking a library
+
+```
+add_executable(hello_binary
+    src/main.cpp
+)
+
+target_link_libraries( hello_binary
+    PRIVATE
+        hello_library
+)
+```
+
+## Including Directories
+就是类似于gcc中的-I选项：
+
+```
+target_include_directories(target
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+)
+```
+这条命令产生2个作用：
+* 在编译库的时候，include 这个目录
+* 在生成二进制文件的时候，include这个目录
+
+## CMAKE_CXX使用
+
+```
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+```
+
+## include
+* 运行并执行cmake代码
+```
+include(CheckLibraryExists)
+```
+## get_filename_component
+获取文件名字的某个部分：
+
+```
+get_filename_component(test_target_name "${test_file}" NAME_WE)
+```
+* test_target_name是变量名
+* ${test_file}是文件列表
+* NAME_WE File name without directory or longest extension
+
+## 定义函数
+
+```
+# leveldb_test是函数名称 test_file是变量
+function(leveldb_test test_file)
+    get_filename_component(test_target_name "${test_file}" NAME_WE)
+
+    add_executable("${test_target_name}" "")
+    target_sources("${test_target_name}"
+      PRIVATE
+        "${PROJECT_BINARY_DIR}/${LEVELDB_PORT_CONFIG_DIR}/port_config.h"
+        "${PROJECT_SOURCE_DIR}/util/testharness.cc"
+        "${PROJECT_SOURCE_DIR}/util/testharness.h"
+        "${PROJECT_SOURCE_DIR}/util/testutil.cc"
+        "${PROJECT_SOURCE_DIR}/util/testutil.h"
+
+        "${test_file}"
+    )
+    target_link_libraries("${test_target_name}" leveldb)
+    target_compile_definitions("${test_target_name}"
+      PRIVATE
+        LEVELDB_PLATFORM_POSIX=1
+    )
+    if (NOT HAVE_CXX17_HAS_INCLUDE)
+      target_compile_definitions("${test_target_name}"
+        PRIVATE
+          LEVELDB_HAS_PORT_CONFIG_H=1
+      )
+    endif(NOT HAVE_CXX17_HAS_INCLUDE)
+
+    add_test(NAME "${test_target_name}" COMMAND "${test_target_name}")
+  endfunction(leveldb_test)
+
+  leveldb_test("${PROJECT_SOURCE_DIR}/db/c_test.c")
+  leveldb_test("${PROJECT_SOURCE_DIR}/db/fault_injection_test.cc")
+
+  leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue178_test.cc")
+  leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue200_test.cc")
+
+```
+
+## target_source
+
+用来指定编译可执行目标文件的对应的源码
+```bash
+target_sources("${test_target_name}"
+      PRIVATE
+        "${PROJECT_BINARY_DIR}/${LEVELDB_PORT_CONFIG_DIR}/port_config.h"
+        "${PROJECT_SOURCE_DIR}/util/testharness.cc"
+        "${PROJECT_SOURCE_DIR}/util/testharness.h"
+        "${PROJECT_SOURCE_DIR}/util/testutil.cc"
+        "${PROJECT_SOURCE_DIR}/util/testutil.h"
+
+        "${test_file}"
+    )
+```
+
+## target_link_libraries
+* 对某个目标链接文件
+```
+target_link_libraries("${test_target_name}" leveldb)
+```
+
+## enable_testing
+
+* Enables testing for this directory and below
+
+## add_test
+
+```
+add_test(NAME "${test_target_name}" COMMAND "${test_target_name}")
+```
+* 添加一个test命令，用来创建一个测试，使用make log_test
+## option
+
+```
+option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" ON)
+if (LEVELDB_BUILD_TESTS)
+    enable_testing()
+endif(LEVELDB_BUILD_TESTS)
+```
+## find_package
+
+```bash
+find_package(Threads REQUIRED)
+target_link_libraries(leveldb Threads::Threads)
+```
+*
+## check_library_exists
+
+```
+include(CheckLibraryExists)
+check_library_exists(crc32c crc32c_value "" HAVE_CRC32C)
+check_library_exists(snappy snappy_compress "" HAVE_SNAPPY)
+check_library_exists(tcmalloc malloc "" HAVE_TCMALLOC)
+```
+* crc32c是库的名称，crc32c_value是函数的名称，第三个参数是库的位置，HAVE_CRC32C是变量
+
+
+## install来安装
+通过指定 **cmake .. -DCMAKE_INSTALL_PREFIX=/install/location**，来指定安装目录
+
+```
+# 安装cmake_examples_inst_bin 到 ${CMAKE_INSTALL_PREFIX}/bin
+install (TARGETS cmake_examples_inst_bin
+    DESTINATION bin)
+
+install (TARGETS cmake_examples_inst
+LIBRARY DESTINATION lib)
+
+# 安装头文件到 ${CMAKE_INSTALL_PREFIX}/include 目录中
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/
+    DESTINATION include)
+
+# 安装配置文件到${CMAKE_INSTALL_PREFIX}/etc
+install (FILES cmake-examples.conf
+    DESTINATION etc)
+```
+* cmake_examples_inst_bin target的名字
+
+
+
+## CMAKE_BUILD_TYPE
+```
+cmake .. -DCMAKE_BUILD_TYPE=Release
+```
+* Release - Adds the -O3 -DNDEBUG flags to the compiler
+* Debug - Adds the -g flag
+* MinSizeRel - Adds -Os -DNDEBUG
+* RelWithDebInfo - Adds -O2 -g -DNDEBUG flags
+
+## CMAKE_CXX_FLAGS/CMAKE_C_FLAGS
+
+CMAKE_CXX_FLAGS要么是空的，要么根据build type选择合适的CMAKE_CXX_FLAGS，我们可以在顶层CMakeList.txt添加额外的参数
+
+```
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEX2" CACHE STRING "Set C++ Compiler Flags" FORCE)
+```
+
+## Set Per-Target C++ Flags
+```
+target_compile_definitions(cmake_examples_compile_flags
+    PRIVATE EX3
+)
+```
+给编译器编译tareget时，添加 -DEX3定义。
+
+
+## Finding a package
+
+CMake has support for finding the path to these tools using the find_package() function. This will search for CMake modules in the format "FindXXX.cmake" from the list of folders in CMAKE_MODULE_PATH. On linux the default search path will include /usr/share/cmake/Modules
+
+```
+find_package(Boost 1.46.1 REQUIRED COMPONENTS filesystem system)
+```
+* Boost::boost for header only libraries
+* Boost::system for the boost system library.
+* Boost::filesystem for filesystem library.
+
+
+## sub-projects
+
+```
+$ tree
+.
+├── CMakeLists.txt
+├── subbinary
+│   ├── CMakeLists.txt
+│   └── main.cpp
+├── sublibrary1
+│   ├── CMakeLists.txt
+│   ├── include
+│   │   └── sublib1
+│   │       └── sublib1.h
+│   └── src
+│       └── sublib1.cpp
+└── sublibrary2
+    ├── CMakeLists.txt
+    └── include
+        └── sublib2
+            └── sublib2.h
+# top level CMakeLists.txt
+cmake_minimum_required (VERSION 3.5)
+project(subprojects)
+
+# Add sub directories
+add_subdirectory(sublibrary1)
+add_subdirectory(sublibrary2)
+add_subdirectory(subbinary)
+```
+**添加子目录**
+在子目录的CMakeLists.txt中添加
+
+```
+add_subdirectory(sublibrary1)
+add_subdirectory(sublibrary2)
+add_subdirectory(subbinary)
+```
+
+**引用子目录**
+当使用project命令来创建一个项目时，意味着如下变量将会生成，你可以在子项目或者是主项目中生成
+
+```
+${sublibrary1_SOURCE_DIR}
+${sublibrary2_SOURCE_DIR}
+```
+包含的变量如下：
+
+|variable|Info|
+|--------|----|
+|PROJECT_NAME|The name of the project set by the current project()|
+|CMAKE_PROJECT_NAME|the name of the first project set by the project() command, i.e. the top level project|
+|PROJECT_SOURCE_DIR|The source director of the current project.|
+|The source director of the current project.|The build directory for the current project.|
+|name_SOURCE_DIR|The source directory of the project called "name". In this example the source directories created would be sublibrary1_SOURCE_DIR, sublibrary2_SOURCE_DIR, and subbinary_SOURCE_DIR|
+|name_BINARY_DIR|The binary directory of the project called "name". In this example the binary directories created would be sublibrary1_BINARY_DIR, sublibrary2_BINARY_DIR, and subbinary_BINARY_DIR|
+
+
+## Enabling testing
+在top的CMakeLists.txt中添加
+```
+enable_testing()
+```
+这会对当前目录和子目录enbale testing
+
+## Add A  test
+
+使用add_test()函数，能够使用make xxx来进行测试。
+```
+add_test(test_all unit_tests)
+```
