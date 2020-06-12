@@ -1,7 +1,8 @@
 ---
 title: failure的源码学习
 layout: post
-date: 2020-06-11 16:03:54
+date: 2020-06-11
+categories: golang
 ---
 ## 源码
 来自[这里](https://github.com/morikuni/failure)，其给error提供了一种错误码的方式来表示错误，并且与golang中的error能够兼容。具体的API可以见下面的测试用例
@@ -115,6 +116,7 @@ func Custom(err error, wrappers ...Wrapper) error {
 ```
 
 **创建带有code的error---failure.New**
+
 具体的流程如下：
 
 <p align="center"><img src="/assets/img/failure-learning/failure.jpg" width="100%" height="100%"></p>
